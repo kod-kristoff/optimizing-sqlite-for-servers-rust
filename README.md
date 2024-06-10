@@ -22,25 +22,17 @@
 
 ```sh
 > cargo run -p sqlx-sqlite-opt --example quick_dev --release
-Inserting 5,000,000 rows
-Batch completed: 510.266µs
-Batch completed: 5.522293682s
-Batch completed: 11.01568972s
-Batch completed: 16.775657718s
-Batch completed: 22.345852222s
-Batch completed: 27.897444396s
-Batch completed: 33.497580718s
-Batch completed: 39.138281743s
-Batch completed: 44.915136349s
-Batch completed: 50.555347602s
-Last batch completed: 56.128809518s
-Setup completed: 59.008494188s
-Starting benchmark
-Benchmark stopped: 10.002143788s
+   Compiling sqlx-sqlite-opt v0.1.0 (/home/kristoffer/projekt/kristoff/optimizing-sqlite-for-servers-rust/crates/sqlx-sqlite-opt)
+    Finished `release` profile [optimized] target(s) in 3.43s
+     Running `target/release/examples/quick_dev`
+[2024-06-10T11:36:32Z INFO  quick_dev] Inserting 5,000,000 rows
+[2024-06-10T11:37:38Z WARN  sqlx::query] slow statement: execution time exceeded alert threshold summary="VACUUM" db.statement="" rows_affected=1 rows_returned=0 elapsed=2.682693383s elapsed_secs=2.682693383 slow_threshold=1s
+[2024-06-10T11:37:38Z INFO  quick_dev] Starting benchmark
+[2024-06-10T11:37:48Z INFO  quick_dev] Benchmark stopped: 10.002049582s
 ------------------------
-432965 reads
-43287.22013769155 reads/s
+[2024-06-10T11:37:48Z INFO  quick_dev] 354050 reads
+[2024-06-10T11:37:48Z INFO  quick_dev] 35397.74494191265 reads/s
 ------------------------
-51034 writes
-5102.306173725245 writes/s
+[2024-06-10T11:37:48Z INFO  quick_dev] 52194 writes
+[2024-06-10T11:37:48Z INFO  quick_dev] 5218.330460381835 writes/s
 ```

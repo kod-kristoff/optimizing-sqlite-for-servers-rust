@@ -6,14 +6,16 @@ use std::sync::Arc;
 use chrono::Utc;
 use env_logger::Env;
 use sqlx::prelude::FromRow;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::sqlite::{
+    SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow, SqliteSynchronous,
+};
 use sqlx::{Executor, SqlitePool};
 use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("debug,sqlx=warn")).init();
     cleanup();
     let conn_options = SqliteConnectOptions::from_str("sqlite://test.db")?
         .journal_mode(SqliteJournalMode::Wal)
@@ -50,7 +52,11 @@ async fn main() -> eyre::Result<()> {
         sqlx::query_scalar("SELECT id FROM test ORDER BY id DESC LIMIT 1")
             .fetch_one(&read_db)
             .await?;
-
+    log::debug!(
+        "looking for {} [{:?}]",
+        record_id_to_find,
+        record_id_to_find.as_bytes().as_slice()
+    );
     log::info!("Starting benchmark");
 
     let concurrent_readers = 500;
@@ -72,23 +78,17 @@ async fn main() -> eyre::Result<()> {
 
                 let _ = tokio::time::timeout(Duration::from_secs(10), async {
                     loop {
-                        let _row: Option<TestRecord> =
-                            match sqlx::query_as("SELECT * FROM test WHERE id = ?")
-                                .bind(record_id_to_find_local.as_bytes().as_slice())
-                                .fetch_optional(&read_db_local)
-                                .await
-                            {
-                                Err(err) => {
-                                    log::error!("Error: {:#?}", err);
-                                    break;
-                                }
-                                Ok(val) => {
-                                    if val.is_none() {
-                                        log::error!("Got None");
-                                    }
-                                    val
-                                }
-                            };
+                        let _row: SqliteRow = match sqlx::query("SELECT * FROM test WHERE id = ?")
+                            .bind(record_id_to_find_local.as_bytes().as_slice())
+                            .fetch_one(&read_db_local)
+                            .await
+                        {
+                            Err(err) => {
+                                log::error!("Error: {:#?}", err);
+                                break;
+                            }
+                            Ok(val) => val,
+                        };
                         reads_local += 1;
                         // tokio::task::yield_now().await;
                     }

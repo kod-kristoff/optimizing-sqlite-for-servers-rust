@@ -4,16 +4,16 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use chrono::Utc;
+use env_logger::Env;
 use sqlx::prelude::FromRow;
-use sqlx::sqlite::{
-    SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow, SqliteSynchronous,
-};
-use sqlx::{ConnectOptions, Executor, SqlitePool};
-use tokio::time::{self, Duration, Instant};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::{Executor, SqlitePool};
+use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     cleanup();
     let conn_options = SqliteConnectOptions::from_str("sqlite://test.db")?
         .journal_mode(SqliteJournalMode::Wal)
@@ -43,7 +43,7 @@ async fn main() -> eyre::Result<()> {
     .execute(&write_db)
     .await?;
 
-    println!("Inserting 5,000,000 rows");
+    log::info!("Inserting 5,000,000 rows");
     setup_db(&write_db).await?;
 
     let record_id_to_find: Uuid =
@@ -51,7 +51,7 @@ async fn main() -> eyre::Result<()> {
             .fetch_one(&read_db)
             .await?;
 
-    println!("Starting benchmark");
+    log::info!("Starting benchmark");
 
     let concurrent_readers = 500;
     let concurrent_writers = 1;
@@ -65,27 +65,32 @@ async fn main() -> eyre::Result<()> {
     for _c in 0..concurrent_readers {
         let reads_t = reads.clone();
         join_handles.push(tokio::spawn({
-            let record_id_to_find = record_id_to_find.clone();
+            let record_id_to_find_local = record_id_to_find;
             let read_db_local = read_db.clone();
             async move {
                 let mut reads_local = 0;
 
                 let _ = tokio::time::timeout(Duration::from_secs(10), async {
                     loop {
-                        let row: Option<TestRecord> =
+                        let _row: Option<TestRecord> =
                             match sqlx::query_as("SELECT * FROM test WHERE id = ?")
-                                .bind(record_id_to_find.as_bytes().as_slice())
+                                .bind(record_id_to_find_local.as_bytes().as_slice())
                                 .fetch_optional(&read_db_local)
                                 .await
                             {
                                 Err(err) => {
-                                    println!("Error: {:#?}", err);
+                                    log::error!("Error: {:#?}", err);
                                     break;
                                 }
-                                Ok(val) => val,
+                                Ok(val) => {
+                                    if val.is_none() {
+                                        log::error!("Got None");
+                                    }
+                                    val
+                                }
                             };
                         reads_local += 1;
-                        tokio::task::yield_now().await;
+                        // tokio::task::yield_now().await;
                     }
                 })
                 .await;
@@ -113,7 +118,7 @@ async fn main() -> eyre::Result<()> {
                                 .execute(&write_db)
                                 .await
                         {
-                            println!("Error: {:#?}", err);
+                            log::error!("Error: {:#?}", err);
                             break;
                         };
                         writes_local += 1;
@@ -132,22 +137,22 @@ async fn main() -> eyre::Result<()> {
 
     let elapsed = start.elapsed();
 
-    println!("Benchmark stopped: {:?}", elapsed);
+    log::info!("Benchmark stopped: {:?}", elapsed);
     println!("------------------------");
 
     let reads = reads.load(Ordering::Relaxed);
-    println!("{} reads", reads);
+    log::info!("{} reads", reads);
 
     let throughput_read = reads as f64 / elapsed.as_secs_f64();
-    println!("{} reads/s", throughput_read);
+    log::info!("{} reads/s", throughput_read);
 
     println!("------------------------");
 
     let writes = writes.load(Ordering::Relaxed);
-    println!("{} writes", writes);
+    log::info!("{} writes", writes);
 
     let throughput_write = writes as f64 / elapsed.as_secs_f64();
-    println!("{} writes/s", throughput_write);
+    log::info!("{} writes/s", throughput_write);
     Ok(())
 }
 
@@ -158,7 +163,7 @@ fn cleanup() {
 }
 async fn setup_db(db: &SqlitePool) -> eyre::Result<()> {
     let mut tx = db.begin().await?;
-    let start = Instant::now();
+    // let start = Instant::now();
 
     let timestamp = Utc::now().timestamp_millis();
     for i in 0..5_000_000 {
@@ -174,20 +179,21 @@ async fn setup_db(db: &SqlitePool) -> eyre::Result<()> {
         // insert by batches of 500,000 rows
         if i % 500_000 == 0 {
             tx.commit().await?;
-            println!("Batch completed: {:?}", start.elapsed());
+            // println!("Batch completed: {:?}", start.elapsed());
             tx = db.begin().await?;
         }
     }
     tx.commit().await?;
-    println!("Last batch completed: {:?}", start.elapsed());
+    // println!("Last batch completed: {:?}", start.elapsed());
 
     db.execute("VACUUM").await?;
     db.execute("ANALYZE").await?;
-    println!("Setup completed: {:?}", start.elapsed());
+    // println!("Setup completed: {:?}", start.elapsed());
     Ok(())
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct TestRecord {
     id: Uuid,
     timestamp: i64,

@@ -1,0 +1,9 @@
+[workspace]
+members = ["crates/sqlx-sqlite-opt"]
+
+[package]
+name = "optimizing-sqlite-for-servers-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]

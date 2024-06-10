@@ -3,9 +3,25 @@
 - Based on <https://kerkour.com/sqlite-for-servers>
 - Adapted to rust
 
+## Example run sqlitebench (Go)
+
+```bash
+> go run main.go 
+2024/06/10 11:45:29 Inserting 5,000,000 rows
+2024/06/10 11:46:03 Starting benchmark
+2024/06/10 11:46:13 Benchmark stopped: 10.002515085s
+----------------------
+2024/06/10 11:46:13 1736934 reads
+2024/06/10 11:46:13 173649.725618 reads/s
+----------------------
+2024/06/10 11:46:13 54412 writes
+2024/06/10 11:46:13 5439.831836 writes/s
+```
+
 ## Example run sqlx
 
 ```sh
+> cargo run -p sqlx-sqlite-opt --example quick_dev --release
 Inserting 5,000,000 rows
 Batch completed: 510.266µs
 Batch completed: 5.522293682s
